@@ -54,7 +54,7 @@ jobs:
       - name: Read SHA
         shell: bash
         run: |
-          echo "SHA=$(cat /tmp/SHA/sha/sha.txt | tr -d '\n')" >> $GITHUB_ENV
+          echo "SHA=$(cat /tmp/SHA/sha.txt | tr -d '\n')" >> $GITHUB_ENV
 
       - name: Push images
         run: |
@@ -86,11 +86,48 @@ jobs:
       - name: Read PR number
         shell: bash
         run: |
-          echo "PR_NUMBER=$(cat /tmp/pull_request_number/pull_request_number/pull_request_number.txt | tr -d '\n')" >> $GITHUB_ENV
+          echo "PR_NUMBER=$(cat /tmp/pull_request_number/pull_request_number.txt | tr -d '\n')" >> $GITHUB_ENV
+
+      - name: Download ytdl-core update flag
+        uses: actions/download-artifact@v4
+        with:
+          name: ytdl_core_update_flag
+          path: /tmp/ytdl_flag
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GH_PAT }}
+
+      - name: Read ytdl-core update flag
+        id: read_ytdl_flag
+        run: echo "is_ytdl_core_update=$(cat /tmp/ytdl_flag/is_ytdl_core_update.txt)" >> $GITHUB_OUTPUT
 
       - name: Create manifest list and push
         run: |
-          docker buildx imagetools create $(cat /tmp/metadata/metadata/metadata.json | jq -cr '.tags | map("-t " + .) | join(" ")') ${{ env.REGISTRY_IMAGE }}:${{ env.SHA }}-linux-amd64 ${{ env.REGISTRY_IMAGE }}:${{ env.SHA }}-linux-arm64
+          TAGS_COMMAND_PART=$(cat /tmp/metadata/metadata/metadata.json | jq -cr '.tags | map("-t " + .) | join(" ")')
+          YTDL_TAG_PART=""
+          if [[ "${{ steps.read_ytdl_flag.outputs.is_ytdl_core_update }}" == "true" ]]; then
+            YTDL_TAG_PART="-t ${{ env.REGISTRY_IMAGE }}:ytdl-core-pr-${{ env.PR_NUMBER }}"
+          fi
+          docker buildx imagetools create \
+            $TAGS_COMMAND_PART \
+            $YTDL_TAG_PART \
+            '${{ env.REGISTRY_IMAGE }}:${{ env.SHA }}-linux-amd64' \
+            '${{ env.REGISTRY_IMAGE }}:${{ env.SHA }}-linux-arm64'
+
+      - name: Prepare PR comment message
+        id: pr_comment_message
+        run: |
+          MESSAGE="#### :package: :robot: A new release has been made for this pull request.\n\n"
+          MESSAGE="$MESSAGE""To play around with this PR, pull \`${{ env.REGISTRY_IMAGE }}:pr-${{ env.PR_NUMBER }}\`.\n"
+          if [[ "${{ steps.read_ytdl_flag.outputs.is_ytdl_core_update }}" == "true" ]]; then
+            MESSAGE="$MESSAGE""Additionally, as this is a @distube/ytdl-core update, you can use the tag: \`${{ env.REGISTRY_IMAGE }}:ytdl-core-pr-${{ env.PR_NUMBER }}\`.\n"
+          fi
+          MESSAGE="$MESSAGE""\nImages are available for x86_64 and ARM64.\n\n"
+          MESSAGE="$MESSAGE""> Latest commit: ${{ env.SHA }}"
+          # Escape for multiline output
+          MESSAGE="${MESSAGE//'%'/'%25'}"
+          MESSAGE="${MESSAGE//$'\n'/'%0A'}"
+          MESSAGE="${MESSAGE//$'\r'/'%0D'}"
+          echo "message_body=$MESSAGE" >> $GITHUB_OUTPUT
 
       - name: Create comment
         uses: marocchino/sticky-pull-request-comment@v2
@@ -98,11 +135,4 @@ jobs:
           header: "pr-release"
           number: ${{ env.PR_NUMBER }}
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-          message: |
-            #### :package: :robot: A new release has been made for this pull request.
-
-            To play around with this PR, pull `${{ env.REGISTRY_IMAGE }}:pr-${{ env.PR_NUMBER }}`.
-
-            Images are available for x86_64 and ARM64.
-
-            > Latest commit: ${{ env.SHA }}
+          message: ${{ steps.pr_comment_message.outputs.message_body }}

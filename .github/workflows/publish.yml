@@ -84,9 +84,16 @@ jobs:
 
       - name: Combine tags (GitHub Container Registry)
         run: |
+          SMART_TAGS_COMMAND_PART=$(echo "${{ steps.get-tags-ghcr.outputs.tags }}" | sed '/^[[:space:]]*$/d' | awk '{printf "-t ${{ env.REGISTRY_IMAGE }}:%s ", $1}' | sed 's/ $//')
+          
+          echo "Applying smart tags: $SMART_TAGS_COMMAND_PART"
+          echo "Applying SHA tag: -t ${{ env.REGISTRY_IMAGE }}:${{ github.sha }}"
+          echo "Applying explicit latest tag: -t ${{ env.REGISTRY_IMAGE }}:latest"
+
           docker buildx imagetools create \
-            -t ${{ env.REGISTRY_IMAGE }}:latest \
+            $SMART_TAGS_COMMAND_PART \
             -t ${{ env.REGISTRY_IMAGE }}:${{ github.sha }} \
+            -t ${{ env.REGISTRY_IMAGE }}:latest \
             '${{ env.REGISTRY_IMAGE }}:${{ github.sha }}-arm64' \
             '${{ env.REGISTRY_IMAGE }}:${{ github.sha }}-amd64'
 

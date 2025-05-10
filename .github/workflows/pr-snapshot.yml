@@ -19,6 +19,8 @@ jobs:
           - runner-platform: namespace-profile-default-arm64
             build-arch: linux/arm64
     runs-on: ${{ matrix.runner-platform }}
+    outputs:
+      is_ytdl_core_update: ${{ steps.ytdl_check.outputs.is_ytdl_core_update }}
     steps:
       - name: Prepare
         run: |
@@ -98,4 +100,23 @@ jobs:
         with:
           name: pull_request_number
           path: /tmp/pull_request_number.txt
+          overwrite: true
+
+      - name: Determine if ytdl-core update by Dependabot
+        id: ytdl_check
+        run: |
+          if [[ "${{ github.actor }}" == "dependabot[bot]" && "${{ github.event.pull_request.title }}" == *"@distube/ytdl-core"* ]]; then
+            echo "is_ytdl_core_update=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_ytdl_core_update=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Save ytdl-core update flag
+        run: echo "${{ steps.ytdl_check.outputs.is_ytdl_core_update }}" > /tmp/is_ytdl_core_update.txt
+
+      - name: Upload ytdl-core update flag
+        uses: actions/upload-artifact@v4
+        with:
+          name: ytdl_core_update_flag
+          path: /tmp/is_ytdl_core_update.txt
           overwrite: true
