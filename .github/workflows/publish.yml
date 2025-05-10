@@ -84,7 +84,12 @@ jobs:
           docker_image: ${{ env.REGISTRY_IMAGE }}
 
       - name: Combine tags (GitHub Container Registry)
-        run: docker buildx imagetools create $(echo '${{ steps.get-tags-ghcr.outputs.tag }}' | tr "," "\0" | xargs -0 printf -- '-t %s ') '${{ env.REGISTRY_IMAGE }}:${{ github.sha }}-arm64' '${{ env.REGISTRY_IMAGE }}:${{ github.sha }}-amd64'
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.REGISTRY_IMAGE }}:latest \
+            -t ${{ env.REGISTRY_IMAGE }}:${{ github.sha }} \
+            '${{ env.REGISTRY_IMAGE }}:${{ github.sha }}-arm64' \
+            '${{ env.REGISTRY_IMAGE }}:${{ github.sha }}-amd64'
 
   release:
     name: Create GitHub release
