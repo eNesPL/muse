@@ -15,7 +15,6 @@ jobs:
       matrix:
         runner-platform:
           - ubuntu-latest
-          - namespace-profile-default-arm64
         include:
           - runner-platform: ubuntu-latest
             build-arch: linux/amd64
